@@ -89,7 +89,7 @@ GO
 --------------------------------------------------------------
 --SP DE CIFRADOS
 --------------------------------------------------------------
-CREATE OR ALTER PROCEDURE persona.sp_cifrar_personas
+CREATE OR ALTER PROCEDURE persona.cifrar_personas
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -118,7 +118,7 @@ GO
 
 
 
-CREATE OR ALTER PROCEDURE persona.sp_cifrar_contactos
+CREATE OR ALTER PROCEDURE persona.cifrar_contactos
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -138,7 +138,7 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER PROCEDURE administracion.sp_cifrar_cuentas
+CREATE OR ALTER PROCEDURE administracion.cifrar_cuentas
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -158,7 +158,7 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE banco.sp_cifrar_movimientos
+CREATE OR ALTER PROCEDURE banco.cifrar_movimientos
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -184,10 +184,10 @@ GO
 
 --------------EJECUTO SP DE CIFRADOS-----------------------------
 
-EXEC persona.sp_cifrar_personas;
-EXEC persona.sp_cifrar_contactos;
-EXEC administracion.sp_cifrar_cuentas;
-EXEC banco.sp_cifrar_movimientos;
+EXEC persona.cifrar_personas;
+EXEC persona.cifrar_contactos;
+EXEC administracion.cifrar_cuentas;
+EXEC banco.cifrar_movimientos;
 GO
 -----BORRO INDICES NOCLUSTER-------------
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_movimiento_cbu' AND object_id = OBJECT_ID('banco.banco_movimiento'))
@@ -225,7 +225,7 @@ ALTER TABLE banco.banco_movimiento
 DROP COLUMN cbu_origen;
 GO
 
-CREATE OR ALTER PROCEDURE persona.sp_descifrar_personas
+CREATE OR ALTER PROCEDURE persona.descifrar_personas
     @FraseClave NVARCHAR(128)
 AS
 
@@ -251,7 +251,7 @@ GO
 
 
 GO
-CREATE OR ALTER PROCEDURE persona.sp_descifrar_contactos
+CREATE OR ALTER PROCEDURE persona.descifrar_contactos
     @FraseClave NVARCHAR(128)
 AS
 BEGIN
@@ -271,7 +271,7 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE administracion.sp_descifrar_cuentas
+CREATE OR ALTER PROCEDURE administracion.descifrar_cuentas
     @FraseClave NVARCHAR(128)
 AS
 BEGIN
@@ -291,7 +291,7 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE banco.sp_descifrar_movimientos
+CREATE OR ALTER PROCEDURE banco.descifrar_movimientos
     @FraseClave NVARCHAR(128)
 AS
 BEGIN
@@ -321,8 +321,8 @@ GO
 
 ---------------------EJECUTO SP PARA DESCIFRAR TABLAS CIFRADAS-------------------
 
-EXEC persona.sp_descifrar_personas N'MiClaveSegura2025$';
-EXEC persona.sp_descifrar_contactos N'MiClaveSegura2025$';
-EXEC administracion.sp_descifrar_cuentas N'MiClaveSegura2025$';
-EXEC banco.sp_descifrar_movimientos N'MiClaveSegura2025$';
+EXEC persona.descifrar_personas N'MiClaveSegura2025$';
+EXEC persona.descifrar_contactos N'MiClaveSegura2025$';
+EXEC administracion.descifrar_cuentas N'MiClaveSegura2025$';
+EXEC banco.descifrar_movimientos N'MiClaveSegura2025$';
 GO

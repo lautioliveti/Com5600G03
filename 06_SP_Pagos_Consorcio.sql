@@ -1,7 +1,7 @@
 /*
 ------------------------------------------------------------
-Trabajo Pr�ctico Integrador - ENTREGA 5
-Comisi�n: 5600
+Trabajo Práctico Integrador - ENTREGA 5
+Comisión: 5600
 Grupo: 03
 Materia: Bases de Datos Aplicada
 Integrantes: 
@@ -24,14 +24,14 @@ BEGIN
     SET NOCOUNT ON;
 
     ---------------------------------------------------------
-    -- 1) Cargar CSV en tabla temporal
+    -- 1) Cargar CSV
     ---------------------------------------------------------
     IF OBJECT_ID('tempdb..#PagosCSV') IS NOT NULL DROP TABLE #PagosCSV;
     
     CREATE TABLE #PagosCSV (
         id_pago_externo VARCHAR(50),
         fecha_texto VARCHAR(20),
-        cbu_origen VARCHAR(40),
+        cbu_origen VARCHAR(100),
         valor_texto VARCHAR(50)
     );
 
@@ -52,44 +52,44 @@ BEGIN
     END TRY
     BEGIN CATCH
         PRINT 'Error al cargar el CSV: ' + ERROR_MESSAGE();
-        DROP TABLE #PagosCSV;
         RETURN -1;
     END CATCH;
 
+   
+    DELETE FROM #PagosCSV WHERE id_pago_externo IS NULL OR LEN(id_pago_externo) = 0;
 
     ---------------------------------------------------------
-    -- 2) Procesar pagos y determinar UF, consorcio y cuenta destino
+    -- 2) Procesar y Vincular 
     ---------------------------------------------------------
     IF OBJECT_ID('tempdb..#PagosProcesados') IS NOT NULL DROP TABLE #PagosProcesados;
 
     SELECT
         csv.id_pago_externo,
-        LTRIM(RTRIM(csv.cbu_origen)) AS cbu_origen,
+        LTRIM(RTRIM(csv.cbu_origen)) AS cbu_origen, -- Texto plano
         CONVERT(DATE, csv.fecha_texto, 103) AS fecha_pago,
-
         TRY_CAST(
             REPLACE(REPLACE(LTRIM(RTRIM(csv.valor_texto)), '$', ''), '.', '')
             AS NUMERIC(14,2)
         ) AS importe_pago,
 
+        
         ufc.uf_id,
         uf.consorcio_id AS consorcio_id_origen,
-
         cb_origen.cuenta_id AS cuenta_origen_id,
-
-        -- Selección automática de la cuenta principal del consorcio
         ccb_principal.cuenta_id AS cuenta_destino_id,
 
+        
         CASE 
-            WHEN ufc.uf_id IS NULL THEN 'CBU no vinculado a una UF'
-            WHEN ccb_principal.cuenta_id IS NULL THEN 'El consorcio no tiene cuenta principal'
+            WHEN cb_origen.cuenta_id IS NULL THEN 'CBU no existe en BD'
+            WHEN ufc.uf_id IS NULL THEN 'CBU existe pero no tiene UF vinculada'
             ELSE NULL 
         END AS motivo_no_vinculado
 
     INTO #PagosProcesados
     FROM #PagosCSV csv
+   
     LEFT JOIN administracion.cuenta_bancaria cb_origen 
-        ON cb_origen.cbu_cvu = csv.cbu_origen
+        ON cb_origen.cbu_cvu = LTRIM(RTRIM(csv.cbu_origen))
     LEFT JOIN unidad_funcional.uf_cuenta ufc 
         ON cb_origen.cuenta_id = ufc.cuenta_id AND ufc.fecha_hasta IS NULL
     LEFT JOIN unidad_funcional.unidad_funcional uf 
@@ -98,56 +98,46 @@ BEGIN
         ON ccb_principal.consorcio_id = uf.consorcio_id
        AND ccb_principal.es_principal = 1;
 
-
     ---------------------------------------------------------
-    -- 3) Insertar movimientos sin duplicados
+    -- 3) Insertar Movimientos 
     ---------------------------------------------------------
     DECLARE @MovimientosInsertados TABLE (
         movimiento_id INT,
-        cbu_origen VARCHAR(40),
-        fecha DATE,
-        importe NUMERIC(14,2)
+        id_externo VARCHAR(50)
     );
 
-    INSERT INTO banco.banco_movimiento (
-        consorcio_id,
-        cuenta_id,
-        cbu_origen,
-        fecha,
-        importe,
-        estado_conciliacion
-    )
-    OUTPUT
-        inserted.movimiento_id,
-        inserted.cbu_origen,
-        inserted.fecha,
-        inserted.importe
-    INTO @MovimientosInsertados
-    SELECT
-        p.consorcio_id_origen,
-        p.cuenta_destino_id,
-        p.cbu_origen,
-        p.fecha_pago,
-        p.importe_pago,
-        CASE WHEN p.uf_id IS NOT NULL THEN 'ASOCIADO'
-             ELSE 'PENDIENTE'
-        END
-    FROM #PagosProcesados p
-    WHERE p.importe_pago IS NOT NULL
-      AND p.consorcio_id_origen IS NOT NULL
-      AND p.cuenta_destino_id IS NOT NULL
-      AND NOT EXISTS (
-            SELECT 1
-            FROM banco.banco_movimiento bm
-            WHERE bm.cbu_origen = p.cbu_origen
-              AND bm.fecha      = p.fecha_pago
-              AND bm.importe    = p.importe_pago
-              AND bm.cuenta_id  = p.cuenta_destino_id
-      );
+    
+    MERGE INTO banco.banco_movimiento AS Target
+    USING (
+        SELECT * FROM #PagosProcesados p
+        
+        WHERE NOT EXISTS (SELECT 1 FROM banco.pago px WHERE px.id_pago_externo = p.id_pago_externo)
+    ) AS Source
+    ON 1 = 0 
+    WHEN NOT MATCHED THEN
+        INSERT (
+            consorcio_id,
+            cuenta_id,
+            cbu_origen, 
+            fecha,
+            importe,
+            estado_conciliacion
+        )
+        VALUES (
+            Source.consorcio_id_origen, 
+            Source.cuenta_destino_id,   
+            Source.cbu_origen,          
+            Source.fecha_pago,
+            Source.importe_pago,
+            CASE WHEN Source.uf_id IS NOT NULL THEN 'ASOCIADO' ELSE 'NO_ASOCIADO' END
+        )
+        OUTPUT inserted.movimiento_id, Source.id_pago_externo 
+        INTO @MovimientosInsertados (movimiento_id, id_externo);
 
+    PRINT 'Movimientos insertados: ' + CAST(@@ROWCOUNT AS VARCHAR(10));
 
     ---------------------------------------------------------
-    -- 4) Insertar pagos sin duplicados
+    -- 4) Insertar Pagos
     ---------------------------------------------------------
     INSERT INTO banco.pago (
         uf_id,
@@ -156,38 +146,31 @@ BEGIN
         tipo,
         movimiento_id,
         motivo_no_asociado,
-        created_by
+        created_by,
+        id_pago_externo
     )
     SELECT
-        p.uf_id,
+        p.uf_id, 
         p.fecha_pago,
         p.importe_pago,
         'ORDINARIO',
         mi.movimiento_id,
         p.motivo_no_vinculado,
-        'SP_Importar'
+        'SP_Importar',
+        p.id_pago_externo
     FROM #PagosProcesados p
-    JOIN @MovimientosInsertados mi
-      ON p.cbu_origen = mi.cbu_origen
-     AND p.fecha_pago = mi.fecha
-     AND p.importe_pago = mi.importe
-    WHERE NOT EXISTS (
-        SELECT 1 FROM banco.pago px
-        WHERE px.uf_id = p.uf_id
-          AND px.fecha = p.fecha_pago
-          AND px.importe = p.importe_pago
-          AND px.movimiento_id = mi.movimiento_id
-    );
+    INNER JOIN @MovimientosInsertados mi ON p.id_pago_externo = mi.id_externo;
+
+    PRINT 'Pagos registrados: ' + CAST(@@ROWCOUNT AS VARCHAR(10));
 
     DROP TABLE #PagosCSV;
     DROP TABLE #PagosProcesados;
-
 END;
 GO
 
 
 -----------------------------------------------------------------------
-----LLENAR EXPENSAS Y SIMULAR DEUDA
+----  LLENAR EXPENSAS Y SIMULAR DEUDA
 ----------------------------------------------------------------------
 CREATE OR ALTER PROCEDURE expensa.llenar_expensas
 AS
@@ -346,5 +329,175 @@ BEGIN
 	BEGIN CATCH
 	 print 'Pagos importados'
 	END CATCH	
+END;
+GO
+
+
+--------------------------------------------------------------------
+--Generar liquidacion de expensa para un mes
+--------------------------------------------------------------------
+
+CREATE OR ALTER PROCEDURE expensa.generar_liquidacion_mensual
+    @ConsorcioId INT,
+    @Anio INT,
+    @Mes INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- 1. VALIDACIONES DE PERIODO
+    DECLARE @PeriodoId INT;
+    SELECT @PeriodoId = periodo_id 
+    FROM expensa.periodo 
+    WHERE consorcio_id = @ConsorcioId AND anio = @Anio AND mes = @Mes;
+
+    IF @PeriodoId IS NULL
+    BEGIN
+        RAISERROR('El periodo solicitado no existe. Ejecute primero administracion.crear_periodos.', 16, 1);
+        RETURN;
+    END
+
+
+    IF EXISTS (SELECT 1 FROM expensa.expensa_uf WHERE periodo_id = @PeriodoId)
+    BEGIN
+        
+        SELECT 
+            periodo_id,
+            uf_id,
+            porcentaje,
+            saldo_anterior_abonado,
+            pagos_recibidos,
+            deuda_anterior,
+            interes_mora,
+            expensas_ordinarias,
+            expensas_extraordinarias,
+            total_a_pagar,
+            created_by 
+        FROM expensa.expensa_uf 
+        WHERE periodo_id = @PeriodoId;
+
+        RETURN;
+    END
+
+    DECLARE @InteresMora DECIMAL(5,2); 
+    SELECT @InteresMora = interes_post_2do_pct FROM expensa.periodo WHERE periodo_id = @PeriodoId;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- 2. LIMPIEZA
+        DELETE d FROM expensa.expensa_uf_detalle d
+        INNER JOIN expensa.expensa_uf e ON d.expensa_uf_id = e.expensa_uf_id
+        WHERE e.periodo_id = @PeriodoId;
+
+        DELETE i FROM expensa.expensa_uf_interes i
+        INNER JOIN expensa.expensa_uf e ON i.expensa_uf_id = e.expensa_uf_id
+        WHERE e.periodo_id = @PeriodoId;
+
+        DELETE FROM expensa.expensa_uf WHERE periodo_id = @PeriodoId;
+
+        -- 3. CÁLCULO DE TOTALES A DISTRIBUIR
+        DECLARE @TotalOrdinario NUMERIC(14,2) = 0;
+        DECLARE @TotalExtraordinario NUMERIC(14,2) = 0;
+
+        -- Sumar Gastos Ordinarios
+        SELECT @TotalOrdinario = ISNULL(SUM(g.importe), 0)
+        FROM expensa.gasto g
+        INNER JOIN expensa.sub_tipo_gasto st ON g.sub_id = st.sub_id
+        INNER JOIN expensa.tipo_gasto t ON st.tipo_id = t.tipo_id
+        WHERE g.periodo_id = @PeriodoId 
+          AND t.nombre = 'GASTOS ORDINARIOS';
+
+        -- Sumar Gastos Extraordinarios
+        SELECT @TotalExtraordinario = ISNULL(SUM(g.importe), 0)
+        FROM expensa.gasto g
+        INNER JOIN expensa.sub_tipo_gasto st ON g.sub_id = st.sub_id
+        INNER JOIN expensa.tipo_gasto t ON st.tipo_id = t.tipo_id
+        WHERE g.periodo_id = @PeriodoId 
+          AND t.nombre = 'GASTOS EXTRAORDINARIOS';
+
+        IF (@TotalOrdinario = 0 AND @TotalExtraordinario = 0)
+        BEGIN
+            ROLLBACK TRANSACTION;
+            RAISERROR('No se encontraron gastos cargados para este periodo. Cargue los gastos antes de liquidar.', 16, 1);
+            RETURN;
+        END;
+
+        -- 4. GENERACIÓN DE LA EXPENSA POR UF
+        INSERT INTO expensa.expensa_uf (
+            periodo_id,
+            uf_id,
+            porcentaje,
+            saldo_anterior_abonado,
+            pagos_recibidos,
+            deuda_anterior,
+            interes_mora,
+            expensas_ordinarias,
+            expensas_extraordinarias,
+            total_a_pagar,
+            created_by
+        )
+        SELECT 
+            @PeriodoId,
+            uf.uf_id,
+            uf.porcentaje,
+            0, 
+            0, 
+            -- Deuda Anterior
+            ISNULL((
+                SELECT TOP 1 (prev.total_a_pagar - prev.pagos_recibidos)
+                FROM expensa.expensa_uf prev
+                JOIN expensa.periodo p_prev ON prev.periodo_id = p_prev.periodo_id
+                WHERE prev.uf_id = uf.uf_id 
+                  AND p_prev.consorcio_id = @ConsorcioId
+                  AND (p_prev.anio < @Anio OR (p_prev.anio = @Anio AND p_prev.mes < @Mes))
+                ORDER BY p_prev.anio DESC, p_prev.mes DESC
+            ), 0),
+            0, 
+            -- Ordinario
+            CAST((@TotalOrdinario * uf.porcentaje / 100.0) AS NUMERIC(14,2)),
+            -- Extraordinario
+            CAST((@TotalExtraordinario * uf.porcentaje / 100.0) AS NUMERIC(14,2)),
+            0, 
+            'SP_LIQUIDACION'
+        FROM unidad_funcional.unidad_funcional uf
+        WHERE uf.consorcio_id = @ConsorcioId;
+
+        -- 5. ACTUALIZAR INTERESES Y TOTAL FINAL
+        UPDATE expensa.expensa_uf
+        SET 
+            interes_mora = CASE 
+                WHEN deuda_anterior > 0 THEN ROUND(deuda_anterior * (@InteresMora / 100.0), 2)
+                ELSE 0 
+            END,
+            total_a_pagar = deuda_anterior 
+                          + CASE WHEN deuda_anterior > 0 THEN ROUND(deuda_anterior * (@InteresMora / 100.0), 2) ELSE 0 END
+                          + expensas_ordinarias 
+                          + expensas_extraordinarias
+        WHERE periodo_id = @PeriodoId;
+
+        -- 6. GENERAR DETALLE DE GASTOS
+        INSERT INTO expensa.expensa_uf_detalle (expensa_uf_id, gasto_id, concepto, importe)
+        SELECT 
+            e.expensa_uf_id,
+            g.gasto_id,
+            CONCAT(st.nombre, ': ', ISNULL(g.detalle, 'Sin detalle')),
+            CAST((g.importe * e.porcentaje / 100.0) AS NUMERIC(14,2))
+        FROM expensa.expensa_uf e
+        CROSS JOIN expensa.gasto g
+        INNER JOIN expensa.sub_tipo_gasto st ON g.sub_id = st.sub_id
+        WHERE e.periodo_id = @PeriodoId 
+          AND g.periodo_id = @PeriodoId
+          AND g.consorcio_id = @ConsorcioId;
+
+        COMMIT TRANSACTION;
+        
+        SELECT * FROM expensa.expensa_uf WHERE periodo_id = @PeriodoId;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        PRINT 'Error al liquidar expensas: ' + ERROR_MESSAGE();
+    END CATCH
 END;
 GO

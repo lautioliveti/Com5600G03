@@ -55,13 +55,12 @@ GO
 -- Esperado:
 --   - Resultado en formato XML, con nodos que representan la
 --     recaudación por tipo de pago en el período.
---   - Filtra solo pagos ORDINARIO del consorcio 3 en 2025.
 ------------------------------------------------------------------
 PRINT '=== REPORTE 3: Recaudación por tipo y período (XML) ===';
 EXEC expensa.reporte_recudacion_tipo_periodo
     @Anio        = 2025,
-    @ConsorcioId = 3,
-    @TipoPago    = 'ORDINARIO';   -- 'ORDINARIO' o 'EXTRAORDINARIO'
+    @ConsorcioId = 5,
+    @TipoPago    = 'ORDINARIO'; 
 GO
 
 ------------------------------------------------------------------
@@ -76,7 +75,7 @@ PRINT '=== REPORTE 4: Top N meses por gastos/ingresos ===';
 EXEC expensa.reporte_top_gastos_ingresos
     @Anio        = 2025,
     @ConsorcioId = 1,
-    @TopN        = 3;
+    @TopN        = 5;
 GO
 
 ------------------------------------------------------------------
@@ -118,5 +117,5 @@ PRINT '=== REPORTE 7: Deuda del período en USD ===';
 EXEC expensa.reporte_deuda_periodo_usd
     @ConsorcioId = 4,
     @Anio = 2025,
-    @Mes = 5;
+    @Mes = 6;
 GO

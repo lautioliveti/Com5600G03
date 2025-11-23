@@ -58,11 +58,10 @@ PRINT '5. Importando Gastos';
 EXEC administracion.importar_gastos
     @RutaArchivo = N'$(BasePath)Servicios.Servicios.json';
 PRINT '';
-
 -- 6. Cuentas
 PRINT '6. Importando Cuentas';
 EXEC unidad_funcional.importar_uf_cbu
-     @RutaArchivo = N'$(BasePath)Inquilino-propietarios-UF.csv';
+        @RutaArchivo = N'$(BasePath)Inquilino-propietarios-UF.csv';
 PRINT '';
 
 -- 7. Personas
@@ -77,14 +76,32 @@ EXEC banco.importar_conciliar_pagos
     @RutaArchivo = N'$(BasePath)pagos_consorcios.csv';
 PRINT '';
 
--- 9. LLENAR Y SIMULAR EXPENSAS
+-- 9. LLENAR Y SIMULAR EXPENSAS   --Genera las expensas que vengan en el archivo original
 EXEC expensa.llenar_expensas
 PRINT '';
 
 PRINT '=== FIN DE IMPORTACIONES ===';
 GO
 
+----------------------------------------------------------------------------------------------
+--Esta seccion es un lote de prueba que genera expensas para nuevos meses, se necesita el archivo LoteDePruebas
+-----------------------------------------------------------------------------------------------
 /*
+
+--- LOTE DE PRUEBA CON NUEVOS GASTOS PARA GENERAR NUEVAS EXPENSAS---------
+PRINT '5. Importando Gastos';
+EXEC administracion.importar_gastos
+    @RutaArchivo = 'C:\_temp\Servicios.Servicios(LoteDePrueba).json';
+PRINT '';
+
+--GENERAR EXPENSAS POR AÑO MES Y CONSORCIO
+
+-------- 1. Ejecutar Liquidación 
+EXEC expensa.generar_liquidacion_mensual 
+    @ConsorcioId = 1, 
+    @Anio = 2025, 
+    @Mes = 7;
+
 select * from administracion.administracion
 select * from administracion.consorcio
 select * from administracion.consorcio_cuenta_bancaria

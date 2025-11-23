@@ -177,18 +177,20 @@ BEGIN
             Seguros VARCHAR(50),
             GastosGenerales VARCHAR(50),
             Agua VARCHAR(50),
-            Luz VARCHAR(50)
+            Luz VARCHAR(50),
+            Construcciones VARCHAR(50),
+            Reparaciones VARCHAR(50)
         );
 
         -- 2. Cargar JSON
         DECLARE @bulk_json NVARCHAR(MAX) = N'
         INSERT INTO #gastos_archivo (
             ConsorcioNombre, MesNombre, Bancarios, Limpieza, Administracion,
-            Seguros, GastosGenerales, Agua, Luz
+            Seguros, GastosGenerales, Agua, Luz, Construcciones, Reparaciones
         )
         SELECT
             ConsorcioNombre, Mes, BANCARIOS, LIMPIEZA, ADMINISTRACION,
-            SEGUROS, GastosGenerales, Agua, Luz
+            SEGUROS, GastosGenerales, Agua, Luz, Construcciones, Reparaciones
         FROM OPENROWSET(BULK ''' + @RutaArchivo + ''', SINGLE_CLOB) as j
         CROSS APPLY OPENJSON(BulkColumn)
         WITH (
@@ -200,7 +202,10 @@ BEGIN
             SEGUROS VARCHAR(50) ''$.SEGUROS'',
             GastosGenerales VARCHAR(50) ''$."GASTOS GENERALES"'',
             Agua VARCHAR(50) ''$."SERVICIOS PUBLICOS-Agua"'',
-            Luz VARCHAR(50) ''$."SERVICIOS PUBLICOS-Luz"''
+            Luz VARCHAR(50) ''$."SERVICIOS PUBLICOS-Luz"'',
+            -- Mapeo de las nuevas claves del JSON
+            Construcciones VARCHAR(50) ''$.CONSTRUCCIONES'',
+            Reparaciones VARCHAR(50) ''$.REPARACIONES''
         );';
         EXEC(@bulk_json);
 
@@ -215,7 +220,7 @@ BEGIN
             ('mayo', 5), ('junio', 6), ('julio', 7), ('agosto', 8),
             ('septiembre', 9), ('octubre', 10), ('noviembre', 11), ('diciembre', 12);
 
-        -- 4. Insertar gastos con todas las relaciones
+        -- 4. Insertar gastos
         INSERT INTO expensa.gasto (
             consorcio_id,
             periodo_id,
@@ -263,18 +268,20 @@ BEGIN
                 ('SEGUROS', t.Seguros),
                 ('GASTOS GENERALES', t.GastosGenerales),
                 ('Agua', t.Agua),
-                ('Luz', t.Luz)
+                ('Luz', t.Luz),
+                ('CONSTRUCCIONES', t.Construcciones),
+                ('REPARACIONES', t.Reparaciones)
         ) AS g(SubTipoNombre, ImporteCrudo)
         INNER JOIN expensa.sub_tipo_gasto AS sg 
             ON  sg.nombre = CASE g.SubTipoNombre
-				WHEN 'BANCARIOS' THEN 'GASTOS BANCARIOS'
+                WHEN 'BANCARIOS' THEN 'GASTOS BANCARIOS'
                 WHEN 'LIMPIEZA' THEN 'GASTOS DE LIMPIEZA'
                 WHEN 'ADMINISTRACION' THEN 'GASTOS DE ADMINISTRACION'
                 WHEN 'SEGUROS' THEN 'SEGUROS'
                 WHEN 'GASTOS GENERALES' THEN 'GASTOS GENERALES'
                 WHEN 'Agua' THEN 'SERVICIOS PUBLICOS'
                 WHEN 'Luz' THEN 'SERVICIOS PUBLICOS'
-                ELSE g.SubTipoNombre
+                ELSE g.SubTipoNombre 
             END
         INNER JOIN expensa.tipo_gasto AS tg 
             ON tg.tipo_id = sg.tipo_id
@@ -306,6 +313,7 @@ BEGIN
     END CATCH
 END;
 GO
+
 
 CREATE OR ALTER PROCEDURE administracion.crear_periodos
     @Anio SMALLINT

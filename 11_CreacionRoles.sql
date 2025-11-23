@@ -81,6 +81,7 @@ DENY EXECUTE ON administracion.importar_gastos					 TO [Administrativo General];
 DENY EXECUTE ON administracion.cargar_proveedores				 TO [Administrativo General];
 DENY EXECUTE ON administracion.cargar_tipo_gastos				 TO [Administrativo General];
 DENY EXECUTE ON expensa.llenar_expensas							 TO [Administrativo General];
+DENY EXECUTE ON expensa.generar_liquidacion_mensual              TO [Administrativo General];
 
 PRINT '- Permisos asignados correctamente';
 GO
@@ -111,6 +112,7 @@ DENY EXECUTE ON administracion.cargar_proveedores				 TO [Administrativo Bancari
 DENY EXECUTE ON administracion.cargar_tipo_gastos				 TO [Administrativo Bancario];
 DENY EXECUTE ON expensa.llenar_expensas							 TO [Administrativo Bancario];
 DENY EXECUTE ON administracion.crear_periodos					 TO [Administrativo Bancario];
+DENY EXECUTE ON expensa.generar_liquidacion_mensual              TO [Administrativo Bancario];
 
 PRINT '- Permisos asignados correctamente';
 GO
@@ -135,6 +137,7 @@ GRANT EXECUTE ON expensa.reporte_top_gastos_ingresos			 TO [Administrativo Opera
 GRANT EXECUTE ON expensa.reporte_top_morosos					 TO [Administrativo Operativo];
 GRANT EXECUTE ON expensa.reporte_fechas_pagos_uf				 TO [Administrativo Operativo];
 GRANT EXECUTE ON expensa.reporte_deuda_periodo_usd				 TO [Administrativo Operativo];
+GRANT EXECUTE ON expensa.generar_liquidacion_mensual             TO [Administrativo Operativo];
 
 -- DENY explícito a operaciones bancarias y consorcios
 DENY EXECUTE ON banco.importar_conciliar_pagos					 TO [Administrativo Operativo];
@@ -165,6 +168,7 @@ DENY EXECUTE ON administracion.cargar_proveedores				TO [Sistemas];
 DENY EXECUTE ON administracion.cargar_tipo_gastos				TO [Sistemas];
 DENY EXECUTE ON expensa.llenar_expensas							TO [Sistemas];
 DENY EXECUTE ON administracion.crear_periodos					TO [Sistemas];
+DENY EXECUTE ON expensa.generar_liquidacion_mensual             TO [Sistemas];
 PRINT '- Permisos asignados correctamente';
 GO
 

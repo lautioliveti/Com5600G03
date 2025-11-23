@@ -379,10 +379,10 @@ GO
 -- Tabla banco_movimiento
 CREATE TABLE banco.banco_movimiento (
     movimiento_id INT IDENTITY(1,1) PRIMARY KEY,
-    consorcio_id INT NOT NULL,
-    cuenta_id INT NOT NULL,
+    consorcio_id INT,
+    cuenta_id INT,
     cbu_origen VARCHAR(40),
-    fecha DATE NOT NULL,
+    fecha DATE,
     importe NUMERIC(14,2) NOT NULL,
     estado_conciliacion VARCHAR(20) CHECK (estado_conciliacion IN ('PENDIENTE', 'ASOCIADO', 'NO_ASOCIADO')),
     FOREIGN KEY (consorcio_id) REFERENCES administracion.consorcio(consorcio_id),
@@ -395,8 +395,8 @@ CREATE INDEX IX_movimiento_cbu ON banco.banco_movimiento(cbu_origen);
 -- Tabla pago
 CREATE TABLE banco.pago (
     pago_id INT IDENTITY(1,1) PRIMARY KEY,
-    uf_id INT NOT NULL,
-    fecha DATE NOT NULL,
+    uf_id INT, 
+    fecha DATE,
     importe NUMERIC(14,2) NOT NULL CHECK (importe > 0),
     tipo VARCHAR(20) CHECK (tipo IN ('ORDINARIO', 'EXTRAORDINARIO', 'MORA', 'ADELANTADO')),
     movimiento_id INT,
@@ -405,9 +405,11 @@ CREATE TABLE banco.pago (
     updated_at DATETIME,
     created_by VARCHAR(50) DEFAULT 'SYSTEM',
     updated_by VARCHAR(50),
+    id_pago_externo VARCHAR(50),
     FOREIGN KEY (uf_id) REFERENCES unidad_funcional.unidad_funcional(uf_id),
     FOREIGN KEY (movimiento_id) REFERENCES banco.banco_movimiento(movimiento_id)
 );
+GO
 
 CREATE INDEX IX_pago_uf ON banco.pago(uf_id, fecha);
 CREATE INDEX IX_pago_movimiento ON banco.pago(movimiento_id);
